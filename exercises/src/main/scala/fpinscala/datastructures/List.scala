@@ -50,15 +50,48 @@ object List { // `List` companion object. Contains functions for creating and wo
     foldRight(ns, 1.0)(_ * _) // `_ * _` is more concise notation for `(x,y) => x * y`; see sidebar
 
 
-  def tail[A](l: List[A]): List[A] = sys.error("todo")
+  def tail[A](l: List[A]): List[A] = 
+    l match {
+      case Nil => sys.error("tail of empty list")
+      case Cons(h, t) => t
+    }
 
-  def setHead[A](l: List[A], h: A): List[A] = sys.error("todo")
+  def setHead[A](l: List[A], h: A): List[A] = 
+    l match {
+      case Nil => sys.error("cannot set head of empty list")
+      case Cons(x, xs) => Cons(h, xs)
+    }
 
-  def drop[A](l: List[A], n: Int): List[A] = sys.error("todo")
+  def drop[A](l: List[A], n: Int): List[A] = {
+    @annotation.tailrec
+    def go(xs: List[A], countReverse: Int): List[A]  = 
+      (xs, countReverse) match{
+        case (_, j) if j < 0 => sys.error("invalid argument. n must be nonnegataive")
+        case (Nil, j) if j > 0 => sys.error("cannot drop more elements than list contains")
+        case (ys, 0)  => ys
+        case (Cons(h,t), j) => go(t, j-1)
+      }
+    
+    go(l, n)
+  }
 
-  def dropWhile[A](l: List[A], f: A => Boolean): List[A] = sys.error("todo")
+  def dropWhile[A](l: List[A], f: A => Boolean): List[A] = {
+    @annotation.tailrec
+    def go(as: List[A]): List[A]  = 
+      as match{
+        case Cons(x, xs) if f(x) => go(xs)
+        case _ => as
+      }
+    
+    go(l)
+  }
 
-  def init[A](l: List[A]): List[A] = sys.error("todo")
+  def init[A](l: List[A]): List[A] = 
+    l match {
+      case Nil => sys.error("init of empty list")
+      case Cons(_, Nil) => Nil
+      case Cons(x, xs) => Cons(x, init(xs))
+    }
 
   def length[A](l: List[A]): Int = sys.error("todo")
 
