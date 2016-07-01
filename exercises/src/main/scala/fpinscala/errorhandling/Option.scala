@@ -75,7 +75,21 @@ object Option {
   def map4[A,B,C,D,E](a: Option[A], b: Option[B], c: Option[C], d: Option[D])(f: (A, B, C, D) => E): Option[E] = 
     a flatMap (u =>  b flatMap (v => c flatMap (w => d map (x => f(u,v,w,x) ) ) ) )
 
-  def sequence[A](a: List[Option[A]]): Option[List[A]] = sys.error("todo")
+  // my own solution uses local mutation but still preserves RT
+  def sequence[A](a: List[Option[A]]): Option[List[A]] = {
+    import collection.mutable.ListBuffer
+    val buf = new ListBuffer[A]
+    @annotation.tailrec
+    def go(cur: List[Option[A]]): Option[List[A]] = cur match {
+      case Nil => Some(Nil)
+      case Some(v) :: Nil => buf += v; Some(buf.toList)
+      case Some(v) :: t => buf += v; go(t)
+      case _ => None
+    }
+    go(a)
+      
+  }
 
-  def traverse[A, B](a: List[A])(f: A => Option[B]): Option[List[B]] = sys.error("todo")
+  def traverse[A, B](a: List[A])(f: A => Option[B]): Option[List[B]] = 
+    a.foldRight[Option[List[B]]](Some(Nil))((x,y) => map2(f(x),y)(_ :: _))
 }
