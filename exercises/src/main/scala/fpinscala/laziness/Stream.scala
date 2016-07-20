@@ -38,13 +38,29 @@ trait Stream[+A] {
     case Cons(h,t) if p(h()) => cons(h(), t().takeWhile(p))
     case _ => empty
   }
+  
+  def takeWhileViaFoldRight(p: A => Boolean): Stream[A] = 
+    foldRight(empty[A])((a,b) => if (p(a)) cons(a, b) else empty)
 
-  def forAll(p: A => Boolean): Boolean = sys.error("todo")
+  def forAll(p: A => Boolean): Boolean = 
+    foldRight(true)((a,b) => p(a) && b)
 
-  def headOption: Option[A] = sys.error("todo")
+  def headOption: Option[A] = 
+    foldRight(None: Option[A])((a,b) => Some(a))
 
   // 5.7 map, filter, append, flatmap using foldRight. Part of the exercise is
   // writing your own function signatures.
+  def map[B](f: A => B): Stream[B] = 
+    foldRight(empty[B])((a, b) => cons(f(a), b))
+    
+  def filter(p: A => Boolean): Stream[A] = 
+    foldRight(empty[A])((a, b) => if (p(a)) cons(a, b) else b)
+    
+  def append[B >: A](xs: => Stream[B]): Stream[B] = 
+    foldRight(xs)((a, b) => cons(a, b))
+    
+  def flatMap[B](f: A => Stream[B]): Stream[B] = 
+    foldRight(empty[B])((a, b) => f(a) append b)
 
   def startsWith[B](s: Stream[B]): Boolean = sys.error("todo")
 }
