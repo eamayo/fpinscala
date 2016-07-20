@@ -64,6 +64,7 @@ trait Stream[+A] {
 
   def startsWith[B](s: Stream[B]): Boolean = sys.error("todo")
 }
+
 case object Empty extends Stream[Nothing]
 case class Cons[+A](h: () => A, t: () => Stream[A]) extends Stream[A]
 
@@ -80,8 +81,14 @@ object Stream {
     if (as.isEmpty) empty 
     else cons(as.head, apply(as.tail: _*))
 
-  val ones: Stream[Int] = Stream.cons(1, ones)
-  def from(n: Int): Stream[Int] = sys.error("todo")
+  val ones: Stream[Int] = cons(1, ones)
+  
+  def constant[A](a: A): Stream[A] = {
+      lazy val constantStream: Stream[A] = cons(a, constantStream)
+      constantStream
+    }
+  
+  def from(n: Int): Stream[Int] = cons(n, from(n+1))
 
   def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] = sys.error("todo")
 }
