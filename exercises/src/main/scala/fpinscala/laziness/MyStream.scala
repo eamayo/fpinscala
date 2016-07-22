@@ -61,6 +61,21 @@ trait MyStream[+A] {
     
   def flatMap[B](f: A => MyStream[B]): MyStream[B] = 
     foldRight(empty[B])((a, b) => f(a) append b)
+    
+  def mapViaUnfold[B](f: A => B): MyStream[B] = 
+    unfold(headOption)(state => state.map(x => (f(x), drop(1).headOption)))
+  
+//  TODO: need to debug (using fromN example)
+  def takeViaUnfold(n: Int): MyStream[A] = 
+    unfold((n, headOption)){case (n, h) => if (n > 0) h.map(x => (x, (n-1, drop(1).headOption))) else None }
+  
+//  TODO: need to debug (using fromN example)
+  def takeWhileViaUnfold(p: A => Boolean): MyStream[A] = 
+    unfold(headOption)(state => state.filter(p).map(x => (x, drop(1).headOption)))
+  
+  def zipWith[B, C](s: MyStream[B])(f: (A, B) => C): MyStream[C] = ???
+  
+  
 
   def startsWith[B](s: MyStream[B]): Boolean = sys.error("todo")
 }
