@@ -63,21 +63,91 @@ trait MyStream[+A] {
     foldRight(empty[B])((a, b) => f(a) append b)
     
   def mapViaUnfold[B](f: A => B): MyStream[B] = 
-    unfold(headOption)(state => state.map(x => (f(x), drop(1).headOption)))
+    unfold(this){ case Cons(h, t) => Some((f(h()), t())) ; case _ => None}
   
-//  TODO: need to debug (using fromN example)
   def takeViaUnfold(n: Int): MyStream[A] = 
-    unfold((n, headOption)){case (n, h) => if (n > 0) h.map(x => (x, (n-1, drop(1).headOption))) else None }
+    unfold((n, this)){
+      case (n, Cons(h, t)) if n > 0 =>  Some((h(), (n-1, t())))
+      case _ => None
+    }
   
-//  TODO: need to debug (using fromN example)
   def takeWhileViaUnfold(p: A => Boolean): MyStream[A] = 
-    unfold(headOption)(state => state.filter(p).map(x => (x, drop(1).headOption)))
+    unfold(this){
+      case Cons(h, t) if p(h()) =>  Some((h(), t())) 
+      case _ => None
+    }
   
-  def zipWith[B, C](s: MyStream[B])(f: (A, B) => C): MyStream[C] = ???
+  def zipWith[B, C](s: MyStream[B])(f: (A, B) => C): MyStream[C] = 
+    unfold((this, s)){
+      case (Cons(h1, t1), Cons(h2, t2)) =>  Some((f(h1(),h2()), (t1(), t2())))
+      case _ => None
+    }
   
   
+  // Example from the companion booklet: A special case of `zipWith` - Python-style zip()
+  def zip[B](s2: MyStream[B]): MyStream[(A,B)] =
+    zipWith(s2)((_,_))
+  
+  // My solution to zipAll
+  def zipAll[B](s: MyStream[B]): MyStream[(Option[A], Option[B])]  = 
+    unfold((this, s)){
+      case (Cons(h1, t1), Cons(h2, t2)) =>  Some((Some(h1()), Some(h2())), (t1(), t2()))
+      case (Empty, Cons(h2, t2)) =>  Some((None, Some(h2())), (Empty, t2()))
+      case (Cons(h1, t1), Empty) =>  Some((Some(h1()), None), (t1(), Empty))
+      case _ => None
+    }
+  
+  
+  // Another Solution to zipAll from the companion booklet that uses zipWithAll 
+  def zipWithAll[B, C](s: MyStream[B])(f: (Option[A], Option[B]) => C): MyStream[C] =
+    unfold((this, s)){
+      case (Cons(h1, t1), Cons(h2, t2)) =>  Some(f(Some(h1()), Some(h2())), (t1(), t2()))
+      case (Empty, Cons(h2, t2)) =>  Some(f(None, Some(h2())), (Empty, t2()))
+      case (Cons(h1, t1), Empty) =>  Some(f(Some(h1()), None), (t1(), Empty))
+      case _ => None
+    }
+  
+  def zipAll2[B](s: MyStream[B]): MyStream[(Option[A], Option[B])]  = 
+    zipWithAll(s)((_,_))
+  
+  // First I need a function that will zip the 2 streams but unlike zip or zipAll will stop only when the 2nd
+  // stream is exhausted. This will allow me to detect if the second stream is longer than the first one (consequently
+  // s1 startsWith s2 would be false)
+  def zipUntilAllSecondStream[B](s: MyStream[B]): MyStream[(Option[A], B)] = 
+    unfold((this, s)){
+      case (Cons(h1, t1), Cons(h2, t2)) =>  Some((Some(h1()), h2()), (t1(), t2()))
+      case (Empty, Cons(h2, t2)) =>  Some((None, h2()), (Empty, t2()))
+      case _ => None
+    }
+  
+  // Now it should be easy to check if (s1 startsWith s2) since it's   
+  //   True if all elements of the stream (s1 zipUntilAllSecondStream s2) satisfy (Some(a), a)
+  //   False if some element of the stream (s1 zipUntilAllSecondStream s2) satisfies (None, b)
+  def startsWith[A](s: MyStream[A]): Boolean = 
+    zipUntilAllSecondStream(s) forAll {
+        case (Some(a), b) => a == b
+        case (None, _) => false
+      }
+  
+  /* 
+   * Solution from the companion booklet that uses the standard Stream methods
+   *  `s startsWith s2` when corresponding elements of `s` and `s2` are all equal, until the point 
+   *  that `s2` is exhausted. If `s` is exhausted first, or we find an element that doesn't match, 
+   *  we terminate early. Using non-strictness, we can compose these three separate logical steps - the zipping, 
+   *  the termination when the second stream is exhausted, and the termination if a non-matching element is found 
+   *  or the first stream is exhausted.
+  */
+  def startsWith2[A](s: MyStream[A]): Boolean = 
+    zipAll(s).takeWhile(!_._2.isEmpty) forAll {
+      case (h,h2) => h == h2
+    }
 
-  def startsWith[B](s: MyStream[B]): Boolean = sys.error("todo")
+  def tails: MyStream[MyStream[A]] = 
+    unfold(this){ case Cons(h,t) => Some((Cons(h,t), t())) }
+  
+  def hasSubsequence[A](s: MyStream[A]): Boolean = 
+    tails exists (_ startsWith s)
+        
 }
 
 case object Empty extends MyStream[Nothing]
