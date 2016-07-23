@@ -1,5 +1,9 @@
 //package fpinscala.laziness
 
+//  // EA Note: how to compile my code and make it available to the scala REPL
+//  scalac -d classes MyStream.scala
+//  scala -cp classes
+
 import MyStream._
 trait MyStream[+A] {
 
@@ -125,9 +129,9 @@ trait MyStream[+A] {
   //   False if some element of the stream (s1 zipUntilAllSecondStream s2) satisfies (None, b)
   def startsWith[A](s: MyStream[A]): Boolean = 
     zipUntilAllSecondStream(s) forAll {
-        case (Some(a), b) => a == b
-        case (None, _) => false
-      }
+      case (Some(a), b) => a == b
+      case (None, _) => false
+    }
   
   /* 
    * Solution from the companion booklet that uses the standard Stream methods
@@ -143,10 +147,56 @@ trait MyStream[+A] {
     }
 
   def tails: MyStream[MyStream[A]] = 
-    unfold(this){ case Cons(h,t) => Some((Cons(h,t), t())) }
+    unfold(this) { 
+      case Empty => None
+      case s => Some((s, s drop 1)) 
+    } append MyStream(empty)
   
+//  // testing tails
+//  scala> val test = MyStream(1,2,3).tails
+//  test: MyStream[MyStream[Int]] = Cons(<function0>,<function0>)
+
+//  scala> test.map(_.toList).toList
+//  res7: List[List[Int]] = List(List(1, 2, 3), List(2, 3), List(3), List())
+    
+//  scala> val from3 = MyStream.from(3)
+//  from3: MyStream[Int] = Cons(<function0>,<function0>)
+
+//  scala> from3.tails.map(_.take(2).toList).take(10).toList
+//	res5: List[List[Int]] = List(List(3, 4), List(4, 5), List(5, 6), List(6, 7), List(7, 8), List(8, 9), List(9, 10), List(10, 11), List(11, 12), List(12, 13))
+//  
   def hasSubsequence[A](s: MyStream[A]): Boolean = 
     tails exists (_ startsWith s)
+  
+  def scanRight[B](z: B)(f: (A, B) => B): MyStream[B] = 
+    foldRight((z, MyStream(z))){
+      case (a, (b, s)) => {
+        val nextResult = f(a,b)
+        (nextResult, cons(nextResult, s))
+      }
+    }._2
+    
+// // testing my solution for scanRight
+//    scala> MyStream(1,2,3).scanRight(0)(_+_).toList
+//    res2: List[Int] = List(6, 5, 3, 0)
+    
+//  // Another test: using scanRight to generate the output of tails
+//  scala> MyStream(1,2,3).scanRight(MyStream.empty[Int])((a,b) => MyStream.cons(a,b)).map(_.toList).toList
+//  res9: List[List[Int]] = List(List(1, 2, 3), List(2, 3), List(3), List())
+    
+  // Now I can define tails as a special case of scanRight
+  def tailsViaScanRight: MyStream[MyStream[A]] = 
+    this.scanRight(empty[A])((a,b) => cons(a,b))
+  
+  // solution from the companion booklet that improves on mine slightly by using lazy-val
+  // to make sure the pass-by-name foldRight argument is cached in our computation and only used once
+  def scanRight2[B](z: B)(f: (A, => B) => B): MyStream[B] =
+    foldRight((z, MyStream(z)))((a, p0) => {
+      // p0 is passed by-name and used in by-name args in f and cons. So use lazy val to ensure only one evaluation...
+      lazy val p1 = p0
+      val b2 = f(a, p1._1)
+      (b2, cons(b2, p1._2))
+    })._2
         
 }
 
