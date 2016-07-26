@@ -75,11 +75,44 @@ object RNG {
     
     go(count)((Nil, rng))
   }
+  
+  def doubleViaMap: Rand[Double] =
+    map(nonNegativeInt)(n => n.toDouble/(Int.MaxValue.toDouble +1 ))
 
-  def map2[A,B,C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] = ???
+  def map2[A,B,C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] = 
+    rng => {
+      val (a, rng2) = ra(rng)
+      val (b, rng3) = rb(rng2)
+      (f(a,b), rng3)
+    }
 
-  def sequence[A](fs: List[Rand[A]]): Rand[List[A]] = ???
-
+  def sequence[A](fs: List[Rand[A]]): Rand[List[A]] = 
+    rng => fs.foldRight((Nil:List[A], rng)){
+      case (action, (l, r)) => val (x, r2) = action(r); (x :: l, r2) 
+    }
+    
+  // ** An alternative solution from the companion booklet to sequence that uses map2
+  
+  // In `sequence`, the base case of the fold is a `unit` action that returns
+  // the empty list. At each step in the fold, we accumulate in `acc`
+  // and `f` is the current element in the list.
+  // `map2(f, acc)(_ :: _)` results in a value of type `Rand[List[A]]`
+  // We map over that to prepend (cons) the element onto the accumulated list.
+  //
+  // We are using `foldRight`. If we used `foldLeft` then the values in the
+  // resulting list would appear in reverse order. It would be arguably better
+  // to use `foldLeft` followed by `reverse`. What do you think?
+  //  
+  // It's interesting that we never actually need to talk about the `RNG` value
+  // in `sequence`. This is a strong hint that we could make this function
+  // polymorphic in that type.
+  def sequence2[A](fs: List[Rand[A]]): Rand[List[A]] =
+    fs.foldRight(unit(List[A]()))((f, acc) => map2(f, acc)(_ :: _))
+ 
+    
+  def intsViaSequence[A](count: Int): Rand[List[Int]] = 
+    sequence(List.fill(count)(int))
+    
   def flatMap[A,B](f: Rand[A])(g: A => Rand[B]): Rand[B] = ???
 }
 
