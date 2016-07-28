@@ -162,6 +162,18 @@ case class State[S,+A](run: S => (A, S)) {
     
   def map2ViaFlatMap[B,C](sb: State[S, B])(f: (A, B) => C): State[S, C] =
     flatMap(a => sb.map(b => f(a,b)))
+    
+  // *** Some more functions from the book that facilitate
+  //     an imperative style of programming with for-comprehensions
+  
+  def modify[S](f: S => S): State[S, Unit] = for {
+    s <- get // Gets the current state and assigns it to `s`.
+    _ <- set(f(s)) // Sets the new state to `f` applied to `s`.
+  } yield ()
+
+  def get[S]: State[S, S] = State(s => (s, s))
+
+  def set[S](s: S): State[S, Unit] = State(_ => ((), s))
 }
 
 sealed trait Input
@@ -204,6 +216,52 @@ object State {
   def sequenceViaFoldLeft[S,A](l: List[State[S, A]]): State[S, List[A]] =
     l.reverse.foldLeft(unit[S, List[A]](List()))((acc, f) => f.map2(acc)( _ :: _ ))
 
+    
+  // first convert each input to a corresponding state transition
+  def impliedStateTransition(input: Input): State[Machine, (Int, Int)] = 
+    State(machine => 
+      (input, machine) match {
+        case (Coin, Machine(_,y,z))  if y > 0 => 
+          ( (z+1, y), Machine(false, y, z+1))         
+        case (Turn, Machine(x, y, z)) if y > 0 => 
+          val new_y = if (x) y else y-1
+          ( (z, new_y), Machine(if (x) x else !x, new_y, z)) 
+        case (_, Machine(x, y, z)) => ((z, y), Machine(x, y, z))
+        
+        }
+    )
+    
+  // now I can fold left on the list of inputs to get the composite state transition
+  // that corresponds to applying, one after the other, the transitions implied by each input 
+  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = 
+    inputs.tail.foldLeft(impliedStateTransition(inputs.head))(
+        (acc, a) => acc.map2(impliedStateTransition(a))((a,b) => b)
+        )
   
-  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = ???
+  // *** Testing simulateMachine    *** //
+        
+//  scala> import fpinscala.state.State._
+//  import fpinscala.state.State._
+//        
+//  scala> import fpinscala.state.Machine
+//  import fpinscala.state.Machine
+//
+//  scala> import fpinscala.state.Input
+//  import fpinscala.state.Machine
+//  
+//  scala> import fpinscala.state.Coin
+//  import fpinscala.state.Coin
+//  
+//  scala> import fpinscala.state.Turn
+//  import fpinscala.state.Machine
+//
+//  scala> val buy4Candies = simulateMachine(List(Coin, Turn, Coin, Turn,  Coin, Turn, Coin, Turn))
+//  buy4Candies: fpinscala.state.State[fpinscala.state.Machine,(Int, Int)] = State(<function1>)
+
+//	scala> buy4Candies.run(Machine(true, 5, 10))
+//	res6: ((Int, Int), fpinscala.state.Machine) = ((14,1),Machine(true,1,14))
+        
+//  scala> buy4Candies.run(Machine(true, 3, 10))
+//  res8: ((Int, Int), fpinscala.state.Machine) = ((13,0),Machine(true,0,13))
+        
 }
